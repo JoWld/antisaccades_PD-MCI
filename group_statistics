@@ -1,0 +1,86 @@
+
+#   This is a basic R function for group level statistical analysis, # running this script performs basic statistical analysis of the eye tracking summary file PD_AS_MCI_summary.csv provided alongside the script
+
+#  Copyright (C) January 2018, last modified April 2022
+#   J.Waldthaler
+#   University Hospital of Gießen and Marburg
+#
+#   This software may be used, copied, or redistributed as long as it is
+#   not sold and this copyright notice is reproduced on each copy made.
+#   This routine is provided as is without any express or implied
+#   warranties whatsoever.
+
+# load scripts 
+library(Hmisc)
+library(ppcor)
+library(dplyr) 
+
+# set directory 
+setwd("/Users/")
+
+# load summary data csv
+filename = "PD_AS_MCI_summary.csv"
+complete <- read.csv(filename)
+
+# group comparisons 
+# first, ANOVAs comparing antisaccade latency, error rate and express rates among HC, PD-CN and PD-MCI followed by pairwise t tests with FDR correction
+complete %>%
+  anova_test(dv = latency, between = MCI.by.NT2) 
+complete%>%
+  t_test(latency ~ MCI.by.NT2, p.adjust.method = "fdr")
+
+complete %>%
+  anova_test(dv = error.rate, between = MCI.by.NT2) 
+complete%>%
+  t_test(error.rate ~ MCI.by.NT2, p.adjust.method = "fdr") 
+
+complete %>%
+  anova_test(dv = express.rate, between = MCI.by.NT2) 
+
+# same for MCI diagnosis by MOCA
+
+complete %>%
+  anova_test(dv = latency, between = MCI.by.MoCA) 
+
+complete %>%
+  anova_test(dv = error.rate, between = MCI.by.MoCA) 
+complete%>%
+  t_test(error.rate ~ MCI.by.MoCA, p.adjust.method = "fdr") 
+
+complete %>%
+  anova_test(dv = express.rate, between = MCI.by.MoCA) 
+
+
+# re-run ANOVA with age as covarate (i.e., comparing the full models (fm) with the reduced models (rm))
+
+fm_latency <- lm(latency ~ HC + CN + MCI + age, data = complete)
+rm_latency <- lm(latency ~ age, data = complete)
+anova(fm_latency, rm_latency)
+
+fm_error <- lm(error.rate ~ HC + CN + MCI + age, data = complete)
+rm_error <- lm(error.rate ~ age, data = complete)
+anova(fm_error, rm_error)
+
+fm_express <- lm(express.rate ~ HC + CN + MCI + age, data = complete)
+rm_express <- lm(express.rate ~ age, data = complete)
+anova(fm_express, rm_express)
+
+
+# Pearson's correlations 
+# run for whole sample 
+# dat.rcorr = rcorr(as.matrix(complete[,5:19]), type="pearson")
+# or PD only by filtering: 
+PD <- filter(complete, complete$group =="PD")
+
+#OR filter by cognitive status within the PD group:
+#CN <- filter(complete, complete$MCI.by.NT2 =="CN")
+#dat.rcorr = rcorr(as.matrix(CN[,5:19]), type="pearson")
+#MCI <- filter(complete, complete$MCI.by.NT2 =="MCI")
+#dat.rcorr = rcorr(as.matrix(MCI[,5:19]), type="pearson")
+
+# print results for demographics and clinical features (NOTE: given the exploratory character of this analyis, no correction for multiple testing is applied here)
+print(dat.rcorr$r[1:3, 4:10])
+print(dat.rcorr$P[1:3, 4:10])
+# correct for multiple testing and print results for cognitive domain scores 
+print(dat.rcorr$r[1:3,11:15])
+p.adjust(dat.rcorr$P[1:3, 11:15], "fdr")
