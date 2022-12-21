@@ -1,0 +1,110 @@
+#   This is an R function to analyse an antisaccade task recorded with an Eyelink 1000. 
+
+#  Copyright (C) January 2018, last modified December 2022
+#   J.Waldthaler
+#   University Hospital of Gießen and Marburg
+#
+#   This software may be used, copied, or redistributed as long as it is
+#   not sold and this copyright notice is reproduced on each copy made.
+#   This routine is provided as is without any express or implied
+#   warranties whatsoever.
+
+
+# running the script on the example file (example_healthy.asc) will show you the result of 10 trials. The subject performed 8 correct antisaccades,
+# one anticipated saccade and one error which was in the express latency range
+
+#load packages
+require(eyelinker)
+require(dplyr)
+library(scales)
+library(tidyr)
+library(stringr)
+# set directory 
+setwd("~/Documents/")
+
+# all Eyelink output files need to be converted to ".asc" format before running this script
+# load single file or define list for looping the function below
+# for the example data file use
+#dat <- read.asc("example_healthy.asc")
+filenames = list.files(pattern=".asc")
+
+
+sac_script<- function(i) {
+  # load data
+  raw <- dat$raw
+  raw.long <- dplyr::select(raw,time,xp,yp,block) %>% gather("coord","pos",xp,yp)
+  raw.long <- mutate(raw.long,ts=(time-min(time))/1e3)
+  
+  # define saccades, latency and amplitudes
+  sac <- dat$sac
+  raw <- mutate(raw,saccade=time %In% sac)
+  mutate(raw.long,saccade=time %In% sac) %>% filter(block==1) %>% ggplot(aes(ts,pos,group=coord,col=saccade))+geom_line()
+  target <- filter(dat$msg,str_detect(text,fixed("target_pos"))) 
+  type <- filter(dat$msg,str_detect(text,fixed("type")))
+  start <- filter(dat$msg,str_detect(text,fixed("start_trial"))) 
+  start <- subset( start, select =-3 )
+  sac<- merge(sac, start, by="block")
+  sac$latency <- (sac$stime-sac$time-2000)
+  sac$amplitude <- (sac$sxp-sac$exp)*-1
+  sac <- merge(sac, target, by="block")
+  arrange(sac, latency)
+  for(i in 1:nrow(sac)){
+    if(sac[i,16]=="var target_pos -300"){
+      sac[i,16]= -300
+    }
+  }
+  for(i in 1:nrow(sac)){
+    if(sac[i,16]=="var target_pos 300"){
+      sac[i,16]= 300
+    }
+  }
+  
+  # filter out saccades with starting position outside the fixation zone
+  sac <- filter (sac,sxp>400)
+  sac <- filter (sac,sxp<600)
+  
+  # calculate gain from amplitudes 
+  sac$text<-as.numeric(sac$text)
+  sac$gain <- sac$amplitude/sac$text
+  
+  # filter only sac after stimulus onset and amplitudes > 1°
+  sac<-filter(sac, sac$latency>0)
+  sac <- filter (sac, sac$ampl>1)
+  
+  # select first sac per trial
+  sac <- sac %>% 
+    group_by(block) %>% 
+    filter(row_number()==1)
+  
+  # remove anticipated sac, filter for express sac, errors and correct antisac
+  sac <- filter (sac, sac$latency < 90)
+  sac_ex<- filter(sac, sac$latency>90)
+  sac_ex<- filter(sac, sac$latency<130)
+  sac<- filter(sac, sac$latency>129)
+  sac <- filter(sac, sac$latency<(mean(sac$latency)+2*sd(sac$latency)))
+  pro <- filter (sac, sac$gain> 0)
+  anti <- filter (sac, sac$gain < 0)
+  
+  # combine into results dataframe
+  results <- data.frame(filename, count(sac_ant)+ count(sac_ex) + count(pro)+count(anti),count(sac_ant), count(sac_ex), count(pro), count(anti), 
+                        mean(pro$latency), sd(pro$latency), mean(pro$gain), sd(pro$gain), 
+                        mean(anti$latency),sd(anti$latency), mean(anti$gain), sd(anti$gain), 
+                        count(sac_ex)/(count(pro)+count(anti)+count(sac_ex)), 
+                        count(pro)/(count(pro)+count(anti)))
+  print(results)
+}
+
+
+combined <- NULL
+# loop
+for(i in 1:n(filenames)){
+  print( filenames[i]) 
+  filename = filenames[i]
+  dat <- read.asc(filename)
+  results<-tryCatch({sac_script(i)},error=function(e){})
+  combined = rbind(combined, results)
+}
+
+# create summary file of all participants in the loop
+file <- paste("summary_et.csv")
+write.csv(combined,file=file)
