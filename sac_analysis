@@ -10,6 +10,7 @@
 #   warranties whatsoever.
 
 
+
 # running the script on the example file (example_healthy.asc) will show you the result of 10 trials. The subject performed 8 correct antisaccades,
 # one anticipated saccade and one error which was in the express latency range
 
@@ -59,9 +60,9 @@ sac_script<- function(i) {
     }
   }
   
-  # filter out saccades with starting position outside the fixation zone
-  sac <- filter (sac,sxp>400)
-  sac <- filter (sac,sxp<600)
+  # filter out saccades with starting position outside the fixation zone (3°)
+  sac <- filter (sac,sxp>407)
+  sac <- filter (sac,sxp<592)
   
   # calculate gain from amplitudes 
   sac$text<-as.numeric(sac$text)
